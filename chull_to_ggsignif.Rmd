@@ -1,0 +1,275 @@
+---
+title: "Demo how to get from simple chull to ggsignif"
+output: html_notebook
+---
+
+
+
+This notebook builds upon the [ggplot2 extension vignette](https://cran.r-project.org/web/packages/ggplot2/vignettes/extending-ggplot2.html).
+
+```{r}
+library(tidyverse)
+```
+
+
+# Template
+
+Create a new ggproto object with the class name StatChull that inherits from `Stat`.
+Other possible super-classes could be:
+
+- ggplot2::Geom
+- ggplot2::Stat
+- ggplot2::Position
+- or ggplot2::Scale.
+
+```{r}
+StatChull <- ggproto("StatChull", Stat,
+                     compute_group = function(data, scales) {
+                       data[chull(data$x, data$y), , drop = FALSE]
+                     },
+                     
+                     required_aes = c("x", "y")
+)
+
+```
+
+Some boilerplate to provide an easy to use function for the new StatChull layer:
+
+```{r}
+stat_chull <- function(mapping = NULL, data = NULL, geom = "polygon",
+                       position = "identity", na.rm = FALSE, show.legend = NA, 
+                       inherit.aes = TRUE, ...) {
+  layer(
+    stat = StatChull, data = data, mapping = mapping, geom = geom, 
+    position = position, show.legend = show.legend, inherit.aes = inherit.aes,
+    params = list(na.rm = na.rm, ...)
+  )
+}
+
+
+```
+
+
+Create a plot using the new `stat_chull`:
+
+```{r}
+ggplot(mpg, aes(displ, hwy, color=drv)) + 
+  geom_point() + 
+  stat_chull(fill=NA)
+```
+
+
+```{r}
+StatChull <- ggproto("StatChull", Stat,
+                     compute_group = function(data, scales) {
+                       tmp <- data[chull(data$x, data$y), , drop = FALSE]
+                       tmp$x <- tmp$x + 1
+                       tmp
+                     },
+                     
+                     required_aes = c("x", "y")
+)
+
+ggplot(mpg, aes(displ, hwy, color=drv)) + 
+  geom_point() + 
+  stat_chull(fill=NA)
+
+```
+
+
+## What is chull?
+
+```{r}
+df <- tribble(
+  ~x,  ~y,
+   0,   1,
+   1,   0,
+   0,  -1,
+  -1,   0,
+   0,   0
+)
+plot(df$x, df$y)
+chull(df$x, df$y)
+```
+
+
+
+# Annotate significance in boxplot
+
+The data
+
+```{r}
+a <- rnorm(30, mean=5, sd=1)
+b <- rnorm(25, mean=6, sd=1)
+df <- data_frame(Source=c(rep("A", 30), rep("B", 25)),
+                 Value=c(a, b))
+
+ggplot(df, aes(x=Source, y=Value)) + 
+  geom_boxplot()
+```
+
+
+Manually add annotation:
+
+```{r}
+t.test(a,b)
+p_value <- formatC(t.test(a, b)$p.value, digits=3)
+
+ggplot(df, aes(x=Source, y=Value)) + 
+  geom_boxplot() +
+  geom_text(label=p_value, x=1.5, y=8)
+
+```
+
+
+Creating a new Stat Layer:
+
+
+```{r}
+StatPValue <- ggproto("StatPValue", Stat,
+                     compute_group = function(data, scales) {
+                       print(data)
+                       stop()
+                     },
+                     
+                     required_aes = c("x", "y")
+)
+
+stat_pvalue <- function(mapping = NULL, data = NULL, geom = "text",
+                       position = "identity", na.rm = FALSE, show.legend = NA, 
+                       inherit.aes = TRUE, ...) {
+  layer(
+    stat = StatPValue, data = data, mapping = mapping, geom = geom, 
+    position = position, show.legend = show.legend, inherit.aes = inherit.aes,
+    params = list(na.rm = na.rm, ...)
+  )
+}
+
+
+ggplot(df, aes(x=Source, y=Value)) + 
+  geom_boxplot() +
+  stat_pvalue()
+
+```
+
+
+Use `setup_params` to access the full dataset:
+
+```{r}
+StatPValue <- ggproto("StatPValue", Stat,
+                     setup_params=function(data, params){
+                       params$complete_data <- data
+                       return(params)
+                     },
+                     compute_group = function(data, scales, complete_data) {
+                        p_value <- t.test(complete_data[complete_data$x == 1, "y"], 
+                                          complete_data[complete_data$x == 2, "y"])$p.value
+                        data.frame(label=p_value, x=1, y=1)
+                     },
+                     
+                     required_aes = c("x", "y")
+)
+
+stat_pvalue <- function(mapping = NULL, data = NULL, geom = "text",
+                       position = "identity", na.rm = FALSE, show.legend = NA, 
+                       inherit.aes = TRUE, ...) {
+  layer(
+    stat = StatPValue, data = data, mapping = mapping, geom = geom, 
+    position = position, show.legend = show.legend, inherit.aes = inherit.aes,
+    params = list(na.rm = na.rm, ...)
+  )
+}
+
+
+ggplot(df, aes(x=Source, y=Value)) + 
+  geom_boxplot() +
+  stat_pvalue()
+```
+
+
+Plot only once and fix location
+
+
+```{r}
+StatPValue <- ggproto("StatPValue", Stat,
+                     setup_params=function(data, params){
+                       params$complete_data <- data
+                       return(params)
+                     },
+                     compute_group = function(data, scales, complete_data) {
+                       if(data$group[1] == 1){
+                         p_value <- t.test(complete_data[complete_data$x == 1, "y"], 
+                                          complete_data[complete_data$x == 2, "y"])$p.value
+                         data.frame(label=p_value, x=1.5, y=8)
+                       }else{
+                         data.frame(label="", x=1.5, y=8)
+                       }
+                     },
+                     
+                     required_aes = c("x", "y")
+)
+
+stat_pvalue <- function(mapping = NULL, data = NULL, geom = "text",
+                       position = "identity", na.rm = FALSE, show.legend = NA, 
+                       inherit.aes = TRUE, ...) {
+  layer(
+    stat = StatPValue, data = data, mapping = mapping, geom = geom, 
+    position = position, show.legend = show.legend, inherit.aes = inherit.aes,
+    params = list(na.rm = na.rm, ...)
+  )
+}
+
+
+ggplot(df, aes(x=Source, y=Value)) + 
+  geom_boxplot() +
+  stat_pvalue()
+```
+
+
+
+Let the user provide the location:
+
+```{r}
+StatPValue <- ggproto("StatPValue", Stat,
+                     setup_params=function(data, params){
+                       params$complete_data <- data
+                       return(params)
+                     },
+                     compute_group = function(data, scales, complete_data, loc_x, loc_y) {
+                       if(data$group[1] == 1){
+                         p_value <- t.test(complete_data[complete_data$x == 1, "y"], 
+                                          complete_data[complete_data$x == 2, "y"])$p.value
+                         data.frame(label=p_value, x=loc_x, y=loc_y)
+                       }else{
+                         data.frame(label="", x=loc_x, y=loc_y)
+                       }
+                     },
+                     
+                     required_aes = c("x", "y")
+)
+
+stat_pvalue <- function(loc_x, loc_y,
+                       mapping = NULL, data = NULL, geom = "text",
+                       position = "identity", na.rm = FALSE, show.legend = NA, 
+                       inherit.aes = TRUE, ...) {
+  params <- list(na.rm = na.rm, ...)
+  params$loc_x <- loc_x
+  params$loc_y <- loc_y
+  layer(
+    stat = StatPValue, data = data, mapping = mapping, geom = geom, 
+    position = position, show.legend = show.legend, inherit.aes = inherit.aes,
+    params = params
+  )
+}
+
+
+ggplot(df, aes(x=Source, y=Value)) + 
+  geom_boxplot() +
+  stat_pvalue(loc_x=1.5, loc_y=10)
+```
+
+
+
+
+
+

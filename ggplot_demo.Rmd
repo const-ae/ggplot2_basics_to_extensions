@@ -1,0 +1,217 @@
+---
+title: "ggplot demo"
+output: html_notebook
+---
+
+# Loading the dependencies
+
+```{r}
+library(tidyverse)
+
+# which is equivalent to calling
+library(ggplot2)
+library(tibble)
+library(tidyr)
+library(readr)
+library(purrr)
+library(dplyr)
+```
+
+
+# The Dataset
+
+```{r}
+library(DAAG)
+data("carprice")
+carprice
+```
+
+
+
+## Scatter plot
+
+```{r}
+# Base R
+plot(carprice$MPG.city, carprice$MPG.highway)
+
+# ggplot
+ggplot(carprice, aes(x=MPG.city, y=MPG.highway)) +
+  geom_point()
+```
+
+
+
+
+
+
+
+
+
+## Trend Line
+
+```{r}
+# Base R
+fit <- lm(carprice$MPG.highway~ carprice$Price)
+plot(carprice$Price, carprice$MPG.highway)
+abline(fit)
+
+# ggplot
+ggplot(carprice, aes(x=Price, y=MPG.highway)) +
+  geom_point() +
+  geom_smooth(method="lm")
+```
+
+
+
+
+
+
+
+
+
+# Trend line by car type
+
+```{r}
+# ggplot
+ggplot(carprice, aes(x=MPG.city, y=MPG.highway, color=Type)) +
+  geom_point() +
+  geom_smooth(method="lm", se=FALSE)
+```
+
+```{r}
+# Base R
+fit <- lm(carprice$MPG.highway ~ carprice$MPG.city)
+plot(carprice$MPG.city, carprice$MPG.highway, col=c("red", "blue", "green", "cyan", "pink", "yellow")[carprice$Type])
+abline(fit)
+
+```
+
+
+
+
+
+# Other geom's
+
+Density
+
+```{r}
+carprice %>%
+  filter(Type == "Compact" | Type == "Van") %>%
+  ggplot(aes(x=MPG.city, y=Price, color=Type)) +
+    geom_density_2d()
+```
+
+
+
+Boxplot
+
+```{r}
+ggplot(carprice, aes(x=Type, y=Price)) +
+  geom_boxplot() 
+```
+
+
+
+```{r}
+ggplot(carprice, aes(x=Type, y=Price)) +
+  geom_boxplot(outlier.color=NA) +
+  geom_jitter(height=0, width = 0.1)
+```
+
+
+## Define Mapping in aes or outside?
+
+```{r}
+carprice$green <- c(rep("A", 30), rep("B", 18))
+ggplot(carprice, aes(x=Type, y=Price)) +
+  geom_boxplot(outlier.color=NA) +
+  geom_jitter(height=0, width = 0.1,
+              aes(color=green))
+
+ggplot(carprice, aes(x=Type, y=Price)) +
+  geom_boxplot(outlier.color=NA) +
+  geom_jitter(height=0, width = 0.1,
+              aes(color=Price > 25))
+
+ggplot(carprice, aes(x=Type, y=Price)) +
+  geom_boxplot(outlier.color=NA) +
+  geom_jitter(height=0, width = 0.1,
+              color="green")
+```
+
+
+
+
+# Coordinate transformations
+
+```{r}
+ggplot(carprice, aes(x=MPG.city, y=Price)) +
+  geom_point() +
+  xlim(10, 60) 
+```
+
+
+### Coordinate transformation Gotchas
+
+`xlim` vs. `coord_cartesian`
+
+```{r}
+ggplot(carprice, aes(x=MPG.city, y=Price)) +
+  geom_point() +
+  geom_smooth(method="lm", se=FALSE)
+
+ggplot(carprice, aes(x=MPG.city, y=Price)) +
+  geom_point() +
+  geom_smooth(method="lm", se=FALSE) +
+  xlim(23, 25.5)
+
+ggplot(carprice, aes(x=MPG.city, y=Price)) +
+  geom_point() +
+  coord_cartesian(xlim=c(23, 25.5)) +
+  geom_smooth(method="lm", se=FALSE) 
+```
+
+
+### Log transform
+
+```{r}
+ggplot(carprice, aes(x=MPG.city, y=Price)) +
+  geom_point() +
+  coord_trans(y="log") 
+```
+
+
+
+## Add title, change axis label
+
+```{r}
+ggplot(carprice, aes(x=MPG.city, y=Price)) +
+  geom_point() +
+  xlab("Miles per Gallon in the City")
+```
+
+
+
+
+```{r}
+ggplot(carprice, aes(x=MPG.city, y=Price)) +
+  geom_point() +
+  xlab("Miles per Gallon in the City") +
+  ggtitle("Expensive cars can drive fewer miles per gallon")
+```
+
+
+
+
+Use Latex in the labels:
+
+```{r}
+ggplot(carprice, aes(x=MPG.city, y=Price)) +
+  geom_point() +
+  xlab(latex2exp::TeX("$\\frac{Miles}{Gallon}$"))
+```
+
+
+
+
+
